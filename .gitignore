@@ -1,0 +1,20 @@
+# Ignore Storage (Database and Cache)
+/storage/*
+!/storage/.gitkeep
+
+# Ignore actual config file (users should copy config.example.php)
+/includes/config.php
+
+# Ignore user content
+/content/*
+!/content/.gitkeep
+!/content/sample.md
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore personal notes and ideas
+/docs/
+
+
