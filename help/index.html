@@ -36,7 +36,28 @@
         </div>
 
         <div class="doc-section">
-            <h3 class="fw-bold border-bottom pb-2 mb-4">2. Collecting Feedback</h3>
+            <h3 class="fw-bold border-bottom pb-2 mb-4">2. Document Formats</h3>
+            <p>The system supports multiple document formats, which change how feedback is collected. You can set the format using the <code>'format'</code> key in your document block in <code>config.php</code>.</p>
+            
+            <h5 class="fw-bold mt-4 text-primary">Standard Feedback (<code>'format' => 'section_feedback'</code>)</h5>
+            <p>This is the default format. If omitted, the system falls back to this mode.</p>
+            <ul>
+                <li>Feedback is collected globally at the bottom of each section page.</li>
+                <li>Users can rate the section (e.g., "Looks good", "Needs changes") and leave general comments.</li>
+                <li>When synced, all comments are injected at the very end of the section in the Markdown source file.</li>
+            </ul>
+
+            <h5 class="fw-bold mt-4 text-primary">Questionnaire (<code>'format' => 'questionnaire'</code>)</h5>
+            <p>This format is specifically designed for Q&A documents and surveys.</p>
+            <ul>
+                <li>Any <strong>Ordered List</strong> item (e.g., <code>1. Question</code>) automatically gets an inline answer form directly beneath it.</li>
+                <li>The global section feedback box is hidden on pages that contain questions, keeping the UI focused on the answers.</li>
+                <li>When synced, answers are injected directly beneath their respective questions in the Markdown source file as blockquotes.</li>
+            </ul>
+        </div>
+
+        <div class="doc-section">
+            <h3 class="fw-bold border-bottom pb-2 mb-4">3. Collecting Feedback</h3>
             <p>Once a document is live, users can browse through the pages. At the bottom of every page, they will find a feedback form.</p>
             <p>Users must log in to leave feedback. They can provide their Name, Email, a Rating (e.g., "Looks good", "Needs changes"), and their detailed comments.</p>
             <div class="alert alert-info">
@@ -45,7 +66,7 @@
         </div>
 
         <div class="doc-section">
-            <h3 class="fw-bold border-bottom pb-2 mb-4">3. System Administration</h3>
+            <h3 class="fw-bold border-bottom pb-2 mb-4">4. System Administration</h3>
             <p>The Admin Panel (<code>admin.php</code>) is your control center. Only users with <code>is_admin</code> set to true in the database or config can access this.</p>
             
             <div class="row g-4 mt-2">
@@ -77,7 +98,7 @@
         </div>
 
         <div class="doc-section">
-            <h3 class="fw-bold border-bottom pb-2 mb-4">4. Managing Users</h3>
+            <h3 class="fw-bold border-bottom pb-2 mb-4">5. Managing Users</h3>
             <p>From the Admin Panel, you can add users manually or upload a CSV file.</p>
             <ul>
                 <li><strong>CSV Format:</strong> Ensure your CSV has headers exactly like: <code>email,name,password,is_admin</code></li>

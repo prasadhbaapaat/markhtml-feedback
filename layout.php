@@ -111,7 +111,7 @@
             <?php endif; ?>
 
             <!-- Comments Section -->
-            <?php if (empty($pageError)): ?>
+            <?php if (empty($pageError) && !($format === 'questionnaire' && !empty($hasQuestions))): ?>
                 <div class="card shadow-sm border-0 mt-5 comments-panel">
                     <div class="card-header border-0 pt-4 pb-0 comments-panel-header">
                     <h4 class="mb-0">Reviewer Comments</h4>
@@ -263,7 +263,7 @@
                     <?php endif; ?>
                 </div>
             </div>
-            <?php endif; ?> <!-- End if empty pageError -->
+            <?php endif; ?> <!-- End if empty pageError and not hiding for questionnaire -->
         </main>
     </div>
 </div>

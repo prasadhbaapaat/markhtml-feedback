@@ -30,6 +30,7 @@ class CommentManager {
                 resolved INTEGER NOT NULL DEFAULT 0,
                 ip_address TEXT DEFAULT '',
                 user_agent TEXT DEFAULT '',
+                question_id TEXT DEFAULT '',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ";
@@ -50,6 +51,7 @@ class CommentManager {
             'resolved' => "ALTER TABLE comments ADD COLUMN resolved INTEGER NOT NULL DEFAULT 0",
             'ip_address' => "ALTER TABLE comments ADD COLUMN ip_address TEXT DEFAULT ''",
             'user_agent' => "ALTER TABLE comments ADD COLUMN user_agent TEXT DEFAULT ''",
+            'question_id' => "ALTER TABLE comments ADD COLUMN question_id TEXT DEFAULT ''",
         ];
 
         if (in_array('rating', $existing, true) && !in_array('feedback_type', $existing, true)) {
@@ -65,7 +67,7 @@ class CommentManager {
     }
 
     public function getComments($documentId, $sectionId, $visibleOnly = true) {
-        $sql = "SELECT id, parent_id, document_id, section_id, page_title, name, email, feedback_type, comment, status, resolved, created_at
+        $sql = "SELECT id, parent_id, document_id, section_id, question_id, page_title, name, email, feedback_type, comment, status, resolved, created_at
                 FROM comments
                 WHERE document_id = :document_id AND section_id = :section_id";
 
@@ -114,7 +116,8 @@ class CommentManager {
                 status,
                 resolved,
                 ip_address,
-                user_agent
+                user_agent,
+                question_id
             ) VALUES (
                 :parent_id,
                 :document_id,
@@ -127,7 +130,8 @@ class CommentManager {
                 :status,
                 :resolved,
                 :ip_address,
-                :user_agent
+                :user_agent,
+                :question_id
             )
         ");
 
@@ -144,6 +148,7 @@ class CommentManager {
             ':resolved' => !empty($data['resolved']) ? 1 : 0,
             ':ip_address' => $data['ip_address'] ?? '',
             ':user_agent' => $data['user_agent'] ?? '',
+            ':question_id' => $data['question_id'] ?? '',
         ]);
     }
 }

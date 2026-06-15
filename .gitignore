@@ -9,6 +9,7 @@
 /content/*
 !/content/.gitkeep
 !/content/sample.md
+!/content/client-questionnaire.md
 
 # Ignore OS generated files
 .DS_Store

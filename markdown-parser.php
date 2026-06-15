@@ -64,7 +64,7 @@ final class MarkHtmlMarkdownParser
         ];
     }
 
-    public static function markdownToHtml(string $markdown): string
+    public static function markdownToHtml(string $markdown, array $config = []): string
     {
         $lines = explode("\n", self::normalizeLineEndings($markdown));
         $blocks = [];
@@ -127,20 +127,20 @@ final class MarkHtmlMarkdownParser
                     $index++;
                 }
 
-                $blocks[] = '<blockquote>' . self::markdownToHtml(implode("\n", $quoteLines)) . '</blockquote>';
+                $blocks[] = '<blockquote>' . self::markdownToHtml(implode("\n", $quoteLines), $config) . '</blockquote>';
                 continue;
             }
 
             if (preg_match('/^\s*[-*+]\s+/', $line) === 1) {
                 $list = self::consumeList($lines, $index, '/^\s*[-*+]\s+/');
-                $blocks[] = self::renderList('ul', $list['items']);
+                $blocks[] = self::renderList('ul', $list['items'], $config);
                 $index = $list['nextIndex'];
                 continue;
             }
 
             if (preg_match('/^\s*\d+[.)]\s+/', $line) === 1) {
                 $list = self::consumeList($lines, $index, '/^\s*\d+[.)]\s+/');
-                $blocks[] = self::renderList('ol', $list['items']);
+                $blocks[] = self::renderList('ol', $list['items'], $config);
                 $index = $list['nextIndex'];
                 continue;
             }
@@ -270,7 +270,7 @@ final class MarkHtmlMarkdownParser
         $usedSlugs = &$data['usedSlugs'];
         $config = $data['config'];
         $slug = self::uniqueSlug(self::slugify($title), $usedSlugs);
-        $html = self::markdownToHtml($markdown);
+        $html = self::markdownToHtml($markdown, $config);
         $plainText = self::markdownToPlainText($markdown);
 
         return [
@@ -349,11 +349,19 @@ final class MarkHtmlMarkdownParser
         ];
     }
 
-    private static function renderList(string $tagName, array $items): string
+    private static function renderList(string $tagName, array $items, array $config = []): string
     {
-        $body = array_map(static function (string $item): string {
-            return '<li>' . self::inlineMarkdown($item) . '</li>';
-        }, $items);
+        $body = [];
+        foreach ($items as $item) {
+            $html = '<li>' . self::inlineMarkdown($item);
+            if ($tagName === 'ol' && isset($config['format']) && $config['format'] === 'questionnaire') {
+                $questionId = substr(md5(trim(strip_tags($item))), 0, 12);
+                $html .= "\n<!-- QUESTION_ANSWERS: {$questionId} -->";
+                $html .= "\n<!-- QUESTION_FORM: {$questionId} | " . base64_encode(strip_tags($item)) . " -->";
+            }
+            $html .= '</li>';
+            $body[] = $html;
+        }
 
         return '<' . $tagName . ">\n" . implode("\n", $body) . "\n</" . $tagName . '>';
     }

@@ -160,6 +160,66 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Handle Inline Questionnaire Forms
+    document.body.addEventListener('submit', function(e) {
+        if (e.target.classList.contains('inline-questionnaire-form')) {
+            e.preventDefault();
+            const form = e.target;
+            const formMessage = form.querySelector('.formMessage');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            
+            formMessage.innerHTML = '<span class="text-info">Submitting...</span>';
+            submitBtn.disabled = true;
+            
+            const formData = new FormData(form);
+            
+            fetch('comments.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                submitBtn.disabled = false;
+                if (data.success) {
+                    formMessage.innerHTML = `<span class="text-success">${data.message}</span>`;
+                    
+                    const questionId = formData.get('question_id');
+                    const answersContainer = document.getElementById(`answers-list-${questionId}`);
+                    
+                    if (answersContainer) {
+                        const newAnswer = document.createElement('div');
+                        newAnswer.className = 'comment-item p-2 mb-2 bg-light rounded border border-light';
+                        
+                        const name = formData.get('name') || '';
+                        let commentText = formData.get('comment') || '';
+                        
+                        newAnswer.innerHTML = `
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-1 small fw-bold">${escapeHTML(name)}</h6>
+                                <small class="text-muted" style="font-size: 0.7rem;">Just now</small>
+                            </div>
+                            <p class="mb-0 small" style="white-space: pre-line;">${escapeHTML(commentText)}</p>
+                        `;
+                        
+                        answersContainer.appendChild(newAnswer);
+                    }
+                    
+                    form.reset();
+                    setTimeout(() => {
+                        formMessage.innerHTML = '';
+                    }, 3000);
+                } else {
+                    formMessage.innerHTML = `<span class="text-danger">${data.message}</span>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                submitBtn.disabled = false;
+                formMessage.innerHTML = '<span class="text-danger">Error submitting answer.</span>';
+            });
+        }
+    });
 });
 
 // Simple HTML escaper to prevent basic XSS when rendering optimistic UI

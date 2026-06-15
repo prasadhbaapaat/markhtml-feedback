@@ -14,7 +14,7 @@ class MarkdownInjector
         $this->cm = $cm;
     }
 
-    public function syncComments(string $documentId, string $documentPath, int $splitLevel): int
+    public function syncComments(string $documentId, string $documentPath, int $splitLevel, array $config = []): int
     {
         if (!is_file($documentPath)) {
             throw new Exception("Document file not found: $documentPath");
@@ -24,13 +24,92 @@ class MarkdownInjector
         
         // Strip existing feedback blocks so we can cleanly re-inject
         $source = preg_replace('/\n*<!-- FEEDBACK_START -->[\s\S]*?<!-- FEEDBACK_END -->\n*/', "\n", $source);
+        $source = preg_replace('/\n*<!-- QA_START -->[\s\S]*?<!-- QA_END -->\n*/', "\n", $source);
         $source = str_replace("\r\n", "\n", $source);
         
         // Parse the document using the existing parser to determine the slugs reliably
         $parsed = MarkHtmlMarkdownParser::parseMarkdownDocument($source, ['splitLevel' => $splitLevel]);
         
-        $feedbackBlocks = [];
         $totalInjected = 0;
+        $format = $config['content']['documents'][$documentId]['format'] ?? 'section_feedback';
+
+        if ($format === 'questionnaire') {
+            $answersByQuestion = [];
+            foreach ($parsed['pages'] as $page) {
+                $comments = $this->cm->getComments($documentId, $page['slug'], true);
+                if (empty($comments)) continue;
+                $totalInjected += count($comments);
+
+                $commentTree = [];
+                $replies = [];
+                foreach ($comments as $c) {
+                    if (empty($c['parent_id'])) {
+                        $commentTree[$c['id']] = $c;
+                        $commentTree[$c['id']]['replies'] = [];
+                    } else {
+                        $replies[] = $c;
+                    }
+                }
+                
+                $replies = array_reverse($replies);
+                foreach ($replies as $reply) {
+                    if (isset($commentTree[$reply['parent_id']])) {
+                        $commentTree[$reply['parent_id']]['replies'][] = $reply;
+                    }
+                }
+
+                foreach ($commentTree as $c) {
+                    if (!empty($c['question_id'])) {
+                        $answersByQuestion[$c['question_id']][] = $c;
+                    }
+                }
+            }
+
+            if (empty($answersByQuestion)) {
+                file_put_contents($documentPath, rtrim($source) . "\n");
+                return 0;
+            }
+
+            $lines = explode("\n", $source);
+            $out = "";
+            foreach ($lines as $line) {
+                $out .= $line . "\n";
+                if (preg_match('/^\s*\d+[.)]\s+(.*)$/', $line, $match)) {
+                    $itemText = trim(preg_replace('/^\s*\d+[.)]\s+/', '', $line));
+                    $questionId = substr(md5(trim(strip_tags($itemText))), 0, 12);
+                    
+                    if (isset($answersByQuestion[$questionId])) {
+                        $block = "\n<!-- QA_START -->\n";
+                        foreach ($answersByQuestion[$questionId] as $c) {
+                            $dateStr = date('Y-m-d', strtotime($c['created_at']));
+                            $block .= "> **{$c['name']}** ({$dateStr}):\n";
+                            $cLines = explode("\n", $c['comment']);
+                            foreach ($cLines as $cl) {
+                                $block .= "> " . trim($cl) . "\n";
+                            }
+                            if (!empty($c['replies'])) {
+                                foreach ($c['replies'] as $reply) {
+                                    $replyDate = date('Y-m-d', strtotime($reply['created_at']));
+                                    $block .= ">\n> > **{$reply['name']}** ({$replyDate}):\n";
+                                    $rLines = explode("\n", $reply['comment']);
+                                    foreach ($rLines as $rLine) {
+                                        $block .= "> > " . trim($rLine) . "\n";
+                                    }
+                                }
+                            }
+                            $block .= ">\n";
+                        }
+                        $block .= "<!-- QA_END -->\n\n";
+                        $out .= $block;
+                    }
+                }
+            }
+            
+            file_put_contents($documentPath, rtrim($out) . "\n");
+            return $totalInjected;
+        }
+
+        $feedbackBlocks = [];
         
         foreach ($parsed['pages'] as $page) {
             $slug = $page['slug'];

@@ -52,8 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    $standardFields = ['document_id', 'section_id', 'parent_id', 'name', 'email', 'feedback_type', 'comment', 'website', 'g-recaptcha-response', 'is_questionnaire'];
+    $standardFields = ['document_id', 'section_id', 'parent_id', 'name', 'email', 'feedback_type', 'comment', 'website', 'g-recaptcha-response', 'is_questionnaire', 'question_id', 'question'];
     $extraData = array_diff_key($_POST, array_flip($standardFields));
+    $questionId = trim($_POST['question_id'] ?? '');
     
     $commentText = trim($_POST['comment'] ?? '');
     $customComment = '';
@@ -176,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'status' => $status,
             'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
             'user_agent' => substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 500),
+            'question_id' => $questionId,
         ]);
 
         $message = $status === 'pending'

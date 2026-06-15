@@ -18,10 +18,16 @@ return [
             'sample-doc' => [
                 'title' => 'Sample Documentation',
                 'path' => $rootPath . '/content/sample.md',
+                'format' => 'section_feedback', // Optional. Defaults to 'section_feedback'
                 'theme' => [
                     // You can override global theme variables per document
                     // 'primary' => '#005500',
                 ]
+            ],
+            'client-questionnaire' => [
+                'title' => 'Client Questionnaire',
+                'path' => $rootPath . '/content/client-questionnaire.md',
+                'format' => 'questionnaire', // Use 'questionnaire' to enable inline answers beneath ordered lists
             ],
         ],
         'split_level' => 2,

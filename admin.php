@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $totalSynced = 0;
         try {
             foreach ($config['content']['documents'] as $docId => $docConfig) {
-                $totalSynced += $injector->syncComments($docId, $docConfig['path'], (int) ($config['content']['split_level'] ?? 2));
+                $totalSynced += $injector->syncComments($docId, $docConfig['path'], (int) ($config['content']['split_level'] ?? 2), $config);
             }
             $message = "Successfully synced $totalSynced comments back to the markdown source files.";
         } catch (Exception $e) {

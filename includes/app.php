@@ -71,8 +71,11 @@ function app_parse_document_cached(string $documentPath, string $docId, array $c
         }
     }
 
+    $format = $config['content']['documents'][$docId]['format'] ?? 'section_feedback';
+
     $parsed = MarkHtmlMarkdownParser::parseMarkdownFile($documentPath, [
         'splitLevel' => (int) ($config['content']['split_level'] ?? 2),
+        'format' => $format,
     ]);
 
     file_put_contents($cachePath, json_encode($parsed, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
