@@ -24,7 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($email) || empty($password)) {
         $error = 'Please enter both email and password.';
     } else {
-        $userManager = new UserManager($config['storage']['database_path']);
+        $userManager = new UserManager(
+            $config['storage']['database_path'],
+            $config['users']['default_users'] ?? []
+        );
         $user = $userManager->authenticate($email, $password);
 
         if ($user) {

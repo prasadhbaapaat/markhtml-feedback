@@ -85,6 +85,42 @@ class CommentManager {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Groups a flat list of comments into top-level comments, each carrying a 'replies' array.
+     * Shared by the web view and the markdown sync so threading stays consistent.
+     */
+    public static function buildThreadTree(array $flatComments) {
+        $tree = [];
+        $replies = [];
+
+        foreach ($flatComments as $c) {
+            if (empty($c['parent_id'])) {
+                $c['replies'] = [];
+                $tree[$c['id']] = $c;
+            } else {
+                $replies[] = $c;
+            }
+        }
+
+        $replies = array_reverse($replies);
+        foreach ($replies as $reply) {
+            if (isset($tree[$reply['parent_id']])) {
+                $tree[$reply['parent_id']]['replies'][] = $reply;
+            }
+        }
+
+        return array_values($tree);
+    }
+
+    /**
+     * Moves a comment to a different question id. Used by the sync to upgrade legacy
+     * content-hash ids to stable question ids so answers survive later wording edits.
+     */
+    public function reassignQuestionId($commentId, $newQuestionId) {
+        $stmt = $this->pdo->prepare("UPDATE comments SET question_id = :qid WHERE id = :id");
+        return $stmt->execute([':qid' => $newQuestionId, ':id' => $commentId]);
+    }
+
     public function getCommentCounts($documentId) {
         $stmt = $this->pdo->prepare("
             SELECT section_id, COUNT(*) AS total

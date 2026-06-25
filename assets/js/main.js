@@ -34,10 +34,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     let commentText = formData.get('comment') || '';
                     let isHtml = false;
                     
+                    const attachmentPaths = formData.getAll('attachment_paths[]') || [];
+                    const attachmentNames = formData.getAll('attachment_original_names[]') || [];
+                    
+                    if (attachmentPaths.length > 0) {
+                        for (let i = 0; i < attachmentPaths.length; i++) {
+                            const path = attachmentPaths[i];
+                            const name = attachmentNames[i] || 'Attachment';
+                            commentText += `\n\n${formatAttachmentLink(name, path)}`;
+                        }
+                    }
+
                     if (!commentText) {
                         let hasCustomFields = false;
                         for (let key of formData.keys()) {
-                            if (!['section_id', 'name', 'email', 'feedback_type', 'comment', 'website', 'g-recaptcha-response', 'is_questionnaire'].includes(key)) {
+                            if (!['section_id', 'name', 'email', 'feedback_type', 'comment', 'website', 'g-recaptcha-response', 'is_questionnaire', 'attachment_paths[]', 'attachment_original_names[]'].includes(key)) {
                                 hasCustomFields = true;
                                 break;
                             }
@@ -60,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>
                                 <!-- Refresh to reply -->
                             </div>
-                            <p class="mb-0 mt-2 text-break" style="white-space: pre-line;">${isHtml ? commentText : escapeHTML(commentText)}</p>
+                            <p class="mb-0 mt-2 text-break" style="white-space: pre-line;">${isHtml ? commentText : parseCommentLinks(escapeHTML(commentText))}</p>
                         </div>
                     `;
                     
@@ -76,6 +87,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (typeof grecaptcha !== 'undefined') {
                         grecaptcha.reset();
                     }
+                    
+                    // Clear uploaded files globally
+                    document.querySelectorAll('.upload-message').forEach(msg => {
+                        msg.innerHTML = '';
+                    });
+                    document.querySelectorAll('.file-upload-input').forEach(input => {
+                        input.value = '';
+                    });
                     
                     setTimeout(() => {
                         formMessage.innerHTML = '';
@@ -139,7 +158,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         newReply.innerHTML = `
                             <h6 class="mb-1 fw-bold">${escapeHTML(name)} <small class="text-muted fw-normal ms-2">Just now</small></h6>
-                            <p class="mb-0 text-break" style="white-space: pre-line;">${escapeHTML(commentText)}</p>
+                            <p class="mb-0 text-break" style="white-space: pre-line;">${parseCommentLinks(escapeHTML(commentText))}</p>
                         `;
                         
                         repliesContainer.appendChild(newReply);
@@ -199,13 +218,22 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <h6 class="mb-1 small fw-bold">${escapeHTML(name)}</h6>
                                 <small class="text-muted" style="font-size: 0.7rem;">Just now</small>
                             </div>
-                            <p class="mb-0 small" style="white-space: pre-line;">${escapeHTML(commentText)}</p>
+                            <p class="mb-0 small" style="white-space: pre-line;">${parseCommentLinks(escapeHTML(commentText))}</p>
                         `;
                         
                         answersContainer.appendChild(newAnswer);
                     }
                     
                     form.reset();
+                    
+                    // Clear uploaded files globally
+                    document.querySelectorAll('.upload-message').forEach(msg => {
+                        msg.innerHTML = '';
+                    });
+                    document.querySelectorAll('.file-upload-input').forEach(input => {
+                        input.value = '';
+                    });
+                    
                     setTimeout(() => {
                         formMessage.innerHTML = '';
                     }, 3000);
@@ -218,6 +246,110 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.disabled = false;
                 formMessage.innerHTML = '<span class="text-danger">Error submitting answer.</span>';
             });
+        }
+    });
+    // Handle File Uploads via AJAX (Option A: Inject links into textarea)
+    document.body.addEventListener('click', function(e) {
+        if (e.target.classList.contains('trigger-upload-btn')) {
+            const btn = e.target;
+            const uploadBlock = btn.closest('.upload-block');
+            const fileInput = uploadBlock.querySelector('.file-upload-input');
+            const files = fileInput.files;
+            const progressBarContainer = uploadBlock.querySelector('.upload-progress');
+            const progressBar = progressBarContainer.querySelector('.progress-bar');
+            const messageBox = uploadBlock.querySelector('.upload-message');
+            
+            if (files.length === 0) {
+                messageBox.innerHTML = '<span class="text-warning">Please choose a file first.</span>';
+                return;
+            }
+            
+            const maxSize = 20 * 1024 * 1024; // 20MB
+            const formData = new FormData();
+            let validFiles = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].size > maxSize) {
+                    messageBox.innerHTML = '<span class="text-danger">One or more files exceed 20MB.</span>';
+                    fileInput.value = '';
+                    return;
+                }
+                formData.append('attachment[]', files[i]);
+                validFiles++;
+            }
+            
+            if (validFiles === 0) return;
+            
+            // Find the nearest textarea to inject links into
+            let targetTextarea = null;
+            let container = uploadBlock.closest('li, .card-body');
+            if (container) {
+                const textareas = container.querySelectorAll('textarea[name="comment"]');
+                if (textareas.length > 0) {
+                    targetTextarea = textareas[textareas.length - 1]; 
+                }
+            }
+            if (!targetTextarea) {
+                targetTextarea = document.querySelector('#commentForm textarea[name="comment"]');
+            }
+            
+            progressBarContainer.classList.remove('d-none');
+            progressBar.style.width = '0%';
+            messageBox.innerHTML = '<span class="text-info">Uploading ' + validFiles + ' file(s)...</span>';
+            btn.disabled = true;
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'api_upload.php', true);
+            
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    progressBar.style.width = percentComplete + '%';
+                }
+            };
+            
+            xhr.onload = function() {
+                progressBarContainer.classList.add('d-none');
+                btn.disabled = false;
+                
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        const files = Array.isArray(data.files) ? data.files : [];
+                        if (data.success || files.length > 0) {
+                            let msg = `<span class="text-success">Uploaded ${files.length} file(s) and attached below!</span>`;
+                            if (data.errors && data.errors.length > 0) {
+                                msg += `<br><span class="text-warning">${escapeHTML(data.errors.join(' '))}</span>`;
+                            }
+                            messageBox.innerHTML = msg;
+
+                            files.forEach(f => {
+                                let link = formatAttachmentLink(f.original_name, f.path);
+                                if (targetTextarea) {
+                                    targetTextarea.value += (targetTextarea.value ? '\n\n' : '') + link;
+                                }
+                            });
+                            
+                            fileInput.value = '';
+                            setTimeout(() => { messageBox.innerHTML = ''; }, 4000);
+                        } else {
+                            messageBox.innerHTML = `<span class="text-danger">${escapeHTML(data.message)}</span>`;
+                        }
+                    } catch(err) {
+                        messageBox.innerHTML = '<span class="text-danger">Invalid server response.</span>';
+                    }
+                } else {
+                    messageBox.innerHTML = '<span class="text-danger">Upload failed.</span>';
+                }
+            };
+            
+            xhr.onerror = function() {
+                progressBarContainer.classList.add('d-none');
+                btn.disabled = false;
+                messageBox.innerHTML = '<span class="text-danger">Network error occurred during upload.</span>';
+            };
+            
+            xhr.send(formData);
         }
     });
 });
@@ -233,4 +365,23 @@ function escapeHTML(str) {
             '"': '&quot;'
         }[tag] || tag)
     );
+}
+
+// Builds the markdown link used to embed an uploaded attachment in a comment.
+function formatAttachmentLink(name, path) {
+    return `[Attached File: ${name}](${path})`;
+}
+
+// Simple JS implementation of app_parse_comment_links
+function parseCommentLinks(text) {
+    return String(text).replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (match, label, url) {
+        var u = url.trim();
+        // Only allow http(s) absolute URLs or relative paths; block javascript:, data:, etc.
+        var hasScheme = /^[a-z][a-z0-9+.\-]*:/i.test(u);
+        var isSafe = hasScheme ? /^https?:\/\//i.test(u) : u.indexOf('//') !== 0;
+        if (!isSafe) {
+            return match; // leave as plain (already-escaped) text, no link
+        }
+        return '<a href="' + u + '" target="_blank" rel="noopener noreferrer" class="text-decoration-none fw-medium"><i class="me-1">📎</i>' + label + '</a>';
+    });
 }

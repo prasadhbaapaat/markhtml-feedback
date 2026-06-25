@@ -14,13 +14,23 @@ if (!isset($_SESSION['user_id']) || empty($_SESSION['is_admin'])) {
 }
 
 $config = app_config();
-$userManager = new UserManager($config['storage']['database_path']);
+$userManager = new UserManager(
+    $config['storage']['database_path'],
+    $config['users']['default_users'] ?? []
+);
 
 $message = '';
 $messageType = 'success';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    // CSRF protection: reject any POST without a valid session token.
+    if (!app_csrf_verify($_POST['csrf_token'] ?? null)) {
+        $action = '';
+        $message = 'Invalid or expired security token. Please reload the page and try again.';
+        $messageType = 'danger';
+    }
 
     if ($action === 'clear_cache') {
         $cacheDir = $config['storage']['cache_dir'];
@@ -141,12 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int) ($_POST['id'] ?? 0);
 
         // Prevent deleting yourself
-        $currentUser = $userManager->authenticate($_SESSION['user_email'], 'placeholder'); // Just check existence maybe, or simpler:
-        // Actually we don't have user ID in session, we have user_email.
-        // Let's get the user being deleted to check.
-        $stmt = (new PDO("sqlite:" . $config['storage']['database_path']))->prepare("SELECT email FROM users WHERE id = :id");
-        $stmt->execute([':id' => $id]);
-        $targetUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        $targetUser = $userManager->getUserById($id);
 
         if ($targetUser && $targetUser['email'] === $_SESSION['user_email']) {
             $message = "You cannot delete your own account.";
@@ -221,6 +226,7 @@ $users = $userManager->getUsers();
                             documents.
                         </p>
                         <form method="POST" action="admin.php">
+                            <input type="hidden" name="csrf_token" value="<?= h(app_csrf_token()) ?>">
                             <input type="hidden" name="action" value="clear_cache">
                             <button type="submit" class="btn btn-outline-primary w-100">Clear Cache</button>
                         </form>
@@ -237,6 +243,7 @@ $users = $userManager->getUsers();
                             version control.
                         </p>
                         <form method="POST" action="admin.php">
+                            <input type="hidden" name="csrf_token" value="<?= h(app_csrf_token()) ?>">
                             <input type="hidden" name="action" value="sync_comments">
                             <button type="submit" class="btn btn-outline-success w-100">Sync to Markdown</button>
                         </form>
@@ -255,6 +262,7 @@ $users = $userManager->getUsers();
                         </p>
                         <form method="POST" action="admin.php"
                             onsubmit="return confirm('Are you absolutely sure you want to permanently delete all comments? This cannot be undone.');">
+                            <input type="hidden" name="csrf_token" value="<?= h(app_csrf_token()) ?>">
                             <input type="hidden" name="action" value="reset_comments">
                             <button type="submit" class="btn btn-outline-danger w-100">Wipe Comments</button>
                         </form>
@@ -307,6 +315,7 @@ $users = $userManager->getUsers();
                                         <?php if ($u['email'] !== $_SESSION['user_email']): ?>
                                             <form method="POST" action="admin.php" class="d-inline"
                                                 onsubmit="return confirm('Are you sure you want to revoke access for <?= h($u['name']) ?>?');">
+                                                <input type="hidden" name="csrf_token" value="<?= h(app_csrf_token()) ?>">
                                                 <input type="hidden" name="action" value="delete_user">
                                                 <input type="hidden" name="id" value="<?= $u['id'] ?>">
                                                 <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
@@ -335,6 +344,7 @@ $users = $userManager->getUsers();
         <div class="modal-dialog">
             <div class="modal-content border-0 shadow">
                 <form method="POST" action="admin.php">
+                    <input type="hidden" name="csrf_token" value="<?= h(app_csrf_token()) ?>">
                     <input type="hidden" name="action" value="create_user">
                     <div class="modal-header border-bottom-0">
                         <h5 class="modal-title fw-bold" id="addUserModalLabel">Create New User</h5>
@@ -377,6 +387,7 @@ $users = $userManager->getUsers();
         <div class="modal-dialog">
             <div class="modal-content border-0 shadow">
                 <form method="POST" action="admin.php" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="<?= h(app_csrf_token()) ?>">
                     <input type="hidden" name="action" value="bulk_upload">
                     <div class="modal-header border-bottom-0">
                         <h5 class="modal-title fw-bold" id="bulkUploadModalLabel">Bulk Upload Users</h5>
@@ -387,10 +398,13 @@ $users = $userManager->getUsers();
                             Upload a CSV file to instantly create multiple user accounts. The file must contain exactly
                             3 columns in the following order:
                         </p>
-                        <div class="bg-light p-3 rounded mb-4 font-monospace small">
+                        <div class="bg-light p-3 rounded mb-3 font-monospace small">
                             <strong>Name, Email, Password</strong><br>
                             John Doe, john@example.com, secret123<br>
                             Jane Smith, jane@example.com, secure456
+                        </div>
+                        <div class="mb-4">
+                            <a href="help/sample_users.csv" class="btn btn-sm btn-outline-primary" download>Download Sample CSV</a>
                         </div>
                         <div class="mb-3">
                             <label for="csv_file" class="form-label fw-medium">Select CSV File</label>

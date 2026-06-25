@@ -40,25 +40,7 @@ $htmlContent = $pageData['html'] ?? '';
 $cm = new CommentManager($config['storage']['database_path']);
 $flatComments = $pageError ? [] : $cm->getComments($documentId, $currentPageSlug ?? '');
 
-$commentTree = [];
-$replies = [];
-
-foreach ($flatComments as $c) {
-    if (empty($c['parent_id'])) {
-        $commentTree[$c['id']] = $c;
-        $commentTree[$c['id']]['replies'] = [];
-    } else {
-        $replies[] = $c;
-    }
-}
-
-$replies = array_reverse($replies);
-foreach ($replies as $reply) {
-    if (isset($commentTree[$reply['parent_id']])) {
-        $commentTree[$reply['parent_id']]['replies'][] = $reply;
-    }
-}
-$comments = array_values($commentTree);
+$comments = CommentManager::buildThreadTree($flatComments);
 
 $hasQuestions = false;
 $format = $config['content']['documents'][$documentId]['format'] ?? 'section_feedback';
@@ -79,17 +61,17 @@ if ($format === 'questionnaire') {
         }
         $html = '<div class="question-answers-container mt-2" id="answers-list-' . $qId . '">';
         foreach ($answers as $ans) {
-            $name = htmlspecialchars($ans['name'], ENT_QUOTES, 'UTF-8');
-            $date = htmlspecialchars($ans['created_at'], ENT_QUOTES, 'UTF-8');
-            $text = htmlspecialchars($ans['comment'], ENT_QUOTES, 'UTF-8');
+            $name = h($ans['name']);
+            $date = h($ans['created_at']);
+            $text = app_parse_comment_links(h($ans['comment']));
             $html .= '<div class="comment-item p-2 mb-2 bg-light rounded border border-light">';
             $html .= '<div class="d-flex justify-content-between"><h6 class="mb-1 small fw-bold">' . $name . '</h6><small class="text-muted" style="font-size: 0.7rem;">' . $date . '</small></div>';
             $html .= '<p class="mb-0 small" style="white-space: pre-line;">' . $text . '</p>';
             if (!empty($ans['replies'])) {
                 $html .= '<div class="ms-3 mt-2 border-start ps-2 border-2 border-secondary-subtle">';
                 foreach ($ans['replies'] as $reply) {
-                    $rname = htmlspecialchars($reply['name'], ENT_QUOTES, 'UTF-8');
-                    $rtext = htmlspecialchars($reply['comment'], ENT_QUOTES, 'UTF-8');
+                    $rname = h($reply['name']);
+                    $rtext = app_parse_comment_links(h($reply['comment']));
                     $html .= '<div class="mb-1"><strong class="small">' . $rname . ':</strong> <span class="small">' . $rtext . '</span></div>';
                 }
                 $html .= '</div>';
@@ -104,18 +86,18 @@ if ($format === 'questionnaire') {
         $hasQuestions = true;
         $qId = $matches[1];
         $qTextEncoded = $matches[2];
-        $qText = htmlspecialchars(base64_decode($qTextEncoded), ENT_QUOTES, 'UTF-8');
-        $slug = htmlspecialchars($currentPageSlug, ENT_QUOTES, 'UTF-8');
-        
-        $userName = isset($_SESSION['user_name']) ? htmlspecialchars($_SESSION['user_name'], ENT_QUOTES, 'UTF-8') : '';
-        $userEmail = isset($_SESSION['user_email']) ? htmlspecialchars($_SESSION['user_email'], ENT_QUOTES, 'UTF-8') : '';
+        $qText = h(base64_decode($qTextEncoded));
+        $slug = h($currentPageSlug);
+
+        $userName = isset($_SESSION['user_name']) ? h($_SESSION['user_name']) : '';
+        $userEmail = isset($_SESSION['user_email']) ? h($_SESSION['user_email']) : '';
 
         $formHtml = '<div class="question-form-container mt-2 p-3 bg-white rounded border shadow-sm">';
         $formHtml .= '<form class="inline-questionnaire-form">';
         $formHtml .= '<input type="hidden" name="question_id" value="' . $qId . '">';
         $formHtml .= '<input type="hidden" name="question" value="' . $qText . '">';
         $formHtml .= '<input type="hidden" name="section_id" value="' . $slug . '">';
-        $formHtml .= '<input type="hidden" name="document_id" value="' . htmlspecialchars($documentId, ENT_QUOTES, 'UTF-8') . '">';
+        $formHtml .= '<input type="hidden" name="document_id" value="' . h($documentId) . '">';
         
         if ($userName) {
             $formHtml .= '<input type="hidden" name="name" value="' . $userName . '">';

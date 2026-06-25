@@ -24,9 +24,9 @@ return [
                     // 'primary' => '#005500',
                 ]
             ],
-            'client-questionnaire' => [
-                'title' => 'Client Questionnaire',
-                'path' => $rootPath . '/content/client-questionnaire.md',
+            'questionnaire-sample' => [
+                'title' => 'Questionnaire Sample',
+                'path' => $rootPath . '/content/questionnaire-sample.md',
                 'format' => 'questionnaire', // Use 'questionnaire' to enable inline answers beneath ordered lists
             ],
         ],
@@ -41,8 +41,22 @@ return [
         'cache_dir' => $rootPath . '/storage/cache',
     ],
 
-    // Users are managed via the SQLite Database now.
-
+    // Users are managed via the SQLite Database.
+    // You can define default users here that will be auto-created if they don't exist in the database.
+    //
+    // SECURITY: This default admin is auto-created on first run. The values below ship
+    // publicly in the repository, so anyone could log in if you leave them unchanged.
+    // Set a real email and a strong, unique password BEFORE deploying.
+    'users' => [
+        'default_users' => [
+            [
+                'name' => 'Admin User',
+                'email' => 'admin@example.com',
+                'password' => 'CHANGE_ME_BEFORE_DEPLOY', // <-- REQUIRED: replace with a strong password
+                'is_admin' => true
+            ]
+        ]
+    ],
     'comments' => [
         'enabled' => true,
         'require_approval' => false,

@@ -3,7 +3,7 @@
 class UserManager {
     private $pdo;
 
-    public function __construct($dbPath) {
+    public function __construct($dbPath, array $defaultUsers = []) {
         $dbDir = dirname($dbPath);
 
         if (!is_dir($dbDir)) {
@@ -13,6 +13,10 @@ class UserManager {
         $this->pdo = new PDO("sqlite:" . $dbPath);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->initDb();
+
+        if (!empty($defaultUsers)) {
+            $this->seedUsers($defaultUsers);
+        }
     }
 
     private function initDb() {
@@ -27,6 +31,24 @@ class UserManager {
             )
         ";
         $this->pdo->exec($query);
+    }
+
+    private function seedUsers(array $users) {
+        foreach ($users as $user) {
+            $name = trim((string) ($user['name'] ?? ''));
+            $email = trim((string) ($user['email'] ?? ''));
+            $password = (string) ($user['password'] ?? '');
+
+            if ($name === '' || $email === '' || $password === '') {
+                continue; // skip incomplete default_users entries
+            }
+
+            $stmt = $this->pdo->prepare("SELECT id FROM users WHERE email = :email");
+            $stmt->execute([':email' => $email]);
+            if (!$stmt->fetch()) {
+                $this->createUser($name, $email, $password, $user['is_admin'] ?? false);
+            }
+        }
     }
 
     /**
@@ -74,6 +96,15 @@ class UserManager {
     public function getUsers() {
         $stmt = $this->pdo->query("SELECT id, name, email, is_admin, created_at FROM users ORDER BY name ASC");
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get a user by ID
+     */
+    public function getUserById($id) {
+        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     /**

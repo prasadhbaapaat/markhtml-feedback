@@ -37,6 +37,9 @@ final class MarkHtmlMarkdownParser
         // Strip feedback blocks to prevent double-rendering on the frontend
         $source = preg_replace('/<!-- FEEDBACK_START -->[\s\S]*?<!-- FEEDBACK_END -->/', '', $source);
 
+        // Strip synced questionnaire answer blocks for the same reason
+        $source = preg_replace('/<!-- QA_START -->[\s\S]*?<!-- QA_END -->/', '', $source);
+
         $config = self::mergeOptions(self::DEFAULT_OPTIONS, $options);
         $normalized = self::normalizeLineEndings($source);
         $lines = explode("\n", $normalized);
@@ -349,15 +352,44 @@ final class MarkHtmlMarkdownParser
         ];
     }
 
+    /**
+     * Derives the stable identifier used to match a questionnaire question with its answers.
+     * Shared by the renderer and the sync injector so the two never drift apart.
+     */
+    public static function questionId(string $text): string
+    {
+        return substr(md5(trim(strip_tags($text))), 0, 12);
+    }
+
+    /**
+     * Splits a questionnaire list item into its explicit, stable question id and the
+     * clean question text. The id is authored as a trailing "<!-- qid:XXXX -->" marker
+     * (assigned automatically the first time a document is synced); when it is absent
+     * the id is null and callers fall back to the content-hash questionId().
+     *
+     * @return array{id: ?string, text: string}
+     */
+    public static function extractQuestionId(string $item): array
+    {
+        if (preg_match('/<!--\s*qid:\s*([A-Za-z0-9]+)\s*-->/', $item, $m)) {
+            $text = trim(preg_replace('/\s*<!--\s*qid:\s*[A-Za-z0-9]+\s*-->\s*/', ' ', $item));
+            return ['id' => $m[1], 'text' => $text];
+        }
+
+        return ['id' => null, 'text' => trim($item)];
+    }
+
     private static function renderList(string $tagName, array $items, array $config = []): string
     {
         $body = [];
         foreach ($items as $item) {
-            $html = '<li>' . self::inlineMarkdown($item);
+            $question = self::extractQuestionId($item);
+            $questionText = $question['text'];
+            $html = '<li>' . self::inlineMarkdown($questionText);
             if ($tagName === 'ol' && isset($config['format']) && $config['format'] === 'questionnaire') {
-                $questionId = substr(md5(trim(strip_tags($item))), 0, 12);
+                $questionId = $question['id'] ?? self::questionId($questionText);
                 $html .= "\n<!-- QUESTION_ANSWERS: {$questionId} -->";
-                $html .= "\n<!-- QUESTION_FORM: {$questionId} | " . base64_encode(strip_tags($item)) . " -->";
+                $html .= "\n<!-- QUESTION_FORM: {$questionId} | " . base64_encode(strip_tags($questionText)) . " -->";
             }
             $html .= '</li>';
             $body[] = $html;
@@ -497,6 +529,15 @@ final class MarkHtmlMarkdownParser
         $output = preg_replace('/\*([^*]+)\*/', '<em>$1</em>', $output ?? '');
         $output = preg_replace('/_([^_]+)_/', '<em>$1</em>', $output ?? '');
         $output = preg_replace('/\[([^\]]+)\]\{\.underline\}/', '<u>$1</u>', $output ?? '');
+        $output = preg_replace_callback('/\[UPLOAD(?:,\s*([^\]]+))?\]/', function($matches) {
+            $title = 'Attach File(s)';
+            if (!empty($matches[1])) {
+                $rawTitle = trim(html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8'));
+                $rawTitle = trim($rawTitle, "\"\' ");
+                $title = htmlspecialchars($rawTitle, ENT_QUOTES, 'UTF-8');
+            }
+            return '<div class="upload-block mb-3 border p-3 rounded bg-light"><label class="form-label fw-bold small text-uppercase">' . $title . ' <span class="text-muted fw-normal text-lowercase">(max 20MB per file)</span></label><div class="input-group input-group-sm"><input type="file" multiple class="form-control file-upload-input" name="attachment[]" accept=".docx,.doc,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.pdf,.txt"><button type="button" class="btn btn-outline-primary trigger-upload-btn">Upload Files</button></div><div class="upload-progress mt-2 d-none"><div class="progress" style="height: 5px;"><div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div></div></div><div class="upload-message small mt-1"></div></div>';
+        }, $output ?? '');
 
         foreach ($codeTokens as $index => $html) {
             $output = str_replace('@@CODE' . $index . '@@', $html, $output ?? '');

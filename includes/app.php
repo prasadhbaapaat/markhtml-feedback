@@ -18,6 +18,29 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/**
+ * Returns the current session's CSRF token, generating one if needed.
+ * Requires an active session (callers start the session before use).
+ */
+function app_csrf_token(): string
+{
+    if (session_status() === PHP_SESSION_ACTIVE && empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION['csrf_token'] ?? '';
+}
+
+/**
+ * Validates a submitted CSRF token against the one stored in the session.
+ */
+function app_csrf_verify(?string $token): bool
+{
+    return is_string($token) && $token !== ''
+        && !empty($_SESSION['csrf_token'])
+        && hash_equals($_SESSION['csrf_token'], $token);
+}
+
 function app_current_document_id(array $config): string
 {
     $default = $config['content']['default_document'] ?? '';
@@ -144,3 +167,26 @@ function app_previous_next_pages(array $pages, string $currentSlug): array
     ];
 }
 
+/**
+ * Parses markdown links [text](url) into HTML anchor tags.
+ * Designed to be called on text that has already been HTML escaped.
+ */
+function app_parse_comment_links(string $text): string
+{
+    return preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', static function (array $m): string {
+        $label = $m[1];
+        $url = trim($m[2]);
+
+        // Only allow http(s) absolute URLs or relative paths; block javascript:, data:, vbscript:, etc.
+        $hasScheme = preg_match('#^[a-z][a-z0-9+.\-]*:#i', $url) === 1;
+        $isSafe = $hasScheme
+            ? (bool) preg_match('#^https?://#i', $url)
+            : strpos($url, '//') !== 0; // reject protocol-relative //host
+
+        if (!$isSafe) {
+            return $m[0]; // leave as plain (already-escaped) text, no link
+        }
+
+        return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer" class="text-decoration-none fw-medium"><i class="me-1">📎</i>' . $label . '</a>';
+    }, $text);
+}

@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    $standardFields = ['document_id', 'section_id', 'parent_id', 'name', 'email', 'feedback_type', 'comment', 'website', 'g-recaptcha-response', 'is_questionnaire', 'question_id', 'question'];
+    $standardFields = ['document_id', 'section_id', 'parent_id', 'name', 'email', 'feedback_type', 'comment', 'website', 'g-recaptcha-response', 'is_questionnaire', 'question_id', 'question', 'attachment_path', 'attachment_original_name', 'attachment_paths', 'attachment_original_names'];
     $extraData = array_diff_key($_POST, array_flip($standardFields));
     $questionId = trim($_POST['question_id'] ?? '');
     
@@ -105,7 +105,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $attachmentPaths = $_POST['attachment_paths'] ?? [];
+    $attachmentNames = $_POST['attachment_original_names'] ?? [];
+
     $comment = trim($customComment . "\n" . $commentText);
+
+    if (!empty($attachmentPaths) && is_array($attachmentPaths)) {
+        foreach ($attachmentPaths as $index => $path) {
+            $path = trim((string) $path);
+            // Only accept paths to files actually produced by api_upload.php (storage/uploads/<hash>.<ext>).
+            // This blocks arbitrary URLs / javascript: payloads from being injected as links.
+            if (preg_match('#^storage/uploads/[A-Za-z0-9._-]+$#', $path)) {
+                $attachmentName = trim((string) ($attachmentNames[$index] ?? 'Attachment'));
+                $comment .= "\n\n[Attached File: " . $attachmentName . "](" . $path . ")";
+            }
+        }
+    }
 
     $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
 
@@ -133,7 +148,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $isRecaptchaValid = true;
 
-    if (!empty($config['recaptcha']['enabled'])) {
+    // Inline questionnaire answer forms are posted per-question without a reCAPTCHA widget
+    // and are only reachable by logged-in reviewers, so skip enforcement for them.
+    if (!empty($config['recaptcha']['enabled']) && $questionId === '') {
         $isRecaptchaValid = false;
         $secret = $config['recaptcha']['secret_key'] ?? '';
 

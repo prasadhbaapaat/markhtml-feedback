@@ -101,8 +101,20 @@
             <h3 class="fw-bold border-bottom pb-2 mb-4">5. Managing Users</h3>
             <p>From the Admin Panel, you can add users manually or upload a CSV file.</p>
             <ul>
-                <li><strong>CSV Format:</strong> Ensure your CSV has headers exactly like: <code>email,name,password,is_admin</code></li>
+                <li><strong>CSV Format:</strong> The file must contain exactly 3 columns in the following order: <code>Name, Email, Password</code>. You can download a <a href="sample_users.csv" download>sample CSV here</a>.</li>
+                <li><strong>Default Users:</strong> You can define default users (such as your initial Admin account) in <code>includes/config.php</code> under the <code>['users']['default_users']</code> array. These will be auto-created if they don't exist.</li>
                 <li>If a user forgets their password, they can use the "Forgot Password" link on the login page (if email features are enabled).</li>
+            </ul>
+        </div>
+
+        <div class="doc-section">
+            <h3 class="fw-bold border-bottom pb-2 mb-4">6. File Uploads</h3>
+            <p>You can allow users to attach files (such as screenshots, spreadsheets, or documents) to their feedback by using the upload shortcode.</p>
+            <ul>
+                <li>Place <code>[UPLOAD]</code> anywhere in your Markdown document to generate a standard upload box.</li>
+                <li>To customize the title of the upload box, use <code>[UPLOAD, 'Upload your screenshot here']</code>.</li>
+                <li>When a user uploads a file, it is automatically converted into a clickable Markdown link and injected directly into their comment or answer box.</li>
+                <li>When the document is synced, these file links are saved permanently into your original `.md` files.</li>
             </ul>
         </div>
 

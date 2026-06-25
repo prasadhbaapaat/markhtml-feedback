@@ -40,23 +40,7 @@ class MarkdownInjector
                 if (empty($comments)) continue;
                 $totalInjected += count($comments);
 
-                $commentTree = [];
-                $replies = [];
-                foreach ($comments as $c) {
-                    if (empty($c['parent_id'])) {
-                        $commentTree[$c['id']] = $c;
-                        $commentTree[$c['id']]['replies'] = [];
-                    } else {
-                        $replies[] = $c;
-                    }
-                }
-                
-                $replies = array_reverse($replies);
-                foreach ($replies as $reply) {
-                    if (isset($commentTree[$reply['parent_id']])) {
-                        $commentTree[$reply['parent_id']]['replies'][] = $reply;
-                    }
-                }
+                $commentTree = CommentManager::buildThreadTree($comments);
 
                 foreach ($commentTree as $c) {
                     if (!empty($c['question_id'])) {
@@ -65,22 +49,50 @@ class MarkdownInjector
                 }
             }
 
-            if (empty($answersByQuestion)) {
-                file_put_contents($documentPath, rtrim($source) . "\n");
-                return 0;
+            // Stamp every question with a stable id (assigned once, on the first sync)
+            // so answers survive question wording edits and duplicate question text.
+            $usedIds = [];
+            if (preg_match_all('/<!--\s*qid:\s*([A-Za-z0-9]+)\s*-->/', $source, $idMatches)) {
+                foreach ($idMatches[1] as $existingId) {
+                    $usedIds[$existingId] = true;
+                }
             }
 
             $lines = explode("\n", $source);
             $out = "";
             foreach ($lines as $line) {
-                $out .= $line . "\n";
-                if (preg_match('/^\s*\d+[.)]\s+(.*)$/', $line, $match)) {
-                    $itemText = trim(preg_replace('/^\s*\d+[.)]\s+/', '', $line));
-                    $questionId = substr(md5(trim(strip_tags($itemText))), 0, 12);
+                if (preg_match('/^(\s*\d+[.)]\s+)(.*)$/', $line, $match)) {
+                    $prefix = $match[1];
+                    $question = MarkHtmlMarkdownParser::extractQuestionId(trim($match[2]));
+                    $questionId = $question['id'];
+
+                    if ($questionId === null) {
+                        do {
+                            $questionId = bin2hex(random_bytes(4));
+                        } while (isset($usedIds[$questionId]));
+                        $usedIds[$questionId] = true;
+                        $line = $prefix . $question['text'] . ' <!-- qid:' . $questionId . ' -->';
+                    }
+
+                    $out .= $line . "\n";
+
+                    // Match by the stable id, then adopt any legacy answers stored under the
+                    // old content-hash id (collected before this question had a stable id) and
+                    // upgrade them so they survive future wording edits. Claim them once to
+                    // avoid the same answer bleeding into other identically-worded questions.
+                    $contentHashId = MarkHtmlMarkdownParser::questionId($question['text']);
+                    $answers = $answersByQuestion[$questionId] ?? [];
+                    if ($questionId !== $contentHashId && !empty($answersByQuestion[$contentHashId])) {
+                        foreach ($answersByQuestion[$contentHashId] as $legacy) {
+                            $this->cm->reassignQuestionId($legacy['id'], $questionId);
+                        }
+                        $answers = array_merge($answers, $answersByQuestion[$contentHashId]);
+                        unset($answersByQuestion[$contentHashId]);
+                    }
                     
-                    if (isset($answersByQuestion[$questionId])) {
+                    if (!empty($answers)) {
                         $block = "\n<!-- QA_START -->\n";
-                        foreach ($answersByQuestion[$questionId] as $c) {
+                        foreach ($answers as $c) {
                             $dateStr = date('Y-m-d', strtotime($c['created_at']));
                             $block .= "> **{$c['name']}** ({$dateStr}):\n";
                             $cLines = explode("\n", $c['comment']);
@@ -102,6 +114,8 @@ class MarkdownInjector
                         $block .= "<!-- QA_END -->\n\n";
                         $out .= $block;
                     }
+                } else {
+                    $out .= $line . "\n";
                 }
             }
             
